@@ -1,0 +1,22 @@
+# Copy this file to your home directory as .pypirc
+# Location:
+#   Windows: C:\Users\YourUsername\.pypirc
+#   Linux/Mac: ~/.pypirc
+#
+# Then fill in your API tokens from:
+#   PyPI: https://pypi.org/manage/account/token/
+#   TestPyPI: https://test.pypi.org/manage/account/token/
+
+[distutils]
+index-servers =
+    pypi
+    testpypi
+
+[pypi]
+username = __token__
+password = pypi-YOUR_PYPI_API_TOKEN_HERE
+
+[testpypi]
+repository = https://test.pypi.org/legacy/
+username = __token__
+password = pypi-YOUR_TESTPYPI_API_TOKEN_HERE

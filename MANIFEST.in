@@ -1,0 +1,32 @@
+# Include documentation
+include README.md
+include LICENSE
+include BUILDING.md
+include API_DIFFERENCES.md
+
+# Include C++ source files for extension
+include atomic_ops_ext.cpp
+include setup.py
+include pyproject.toml
+
+# Include requirements
+include requirements.txt
+
+# Exclude build artifacts
+global-exclude *.pyc
+global-exclude __pycache__
+global-exclude *.so
+global-exclude *.pyd
+global-exclude *.dll
+global-exclude .DS_Store
+
+# Exclude test outputs
+exclude ready
+exclude output*.txt
+recursive-exclude tests *.txt
+recursive-exclude tests __pycache__
+
+# Exclude build directories
+prune build
+prune dist
+prune *.egg-info

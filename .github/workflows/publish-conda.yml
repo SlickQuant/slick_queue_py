@@ -1,0 +1,84 @@
+name: Publish to Conda
+
+on:
+  workflow_dispatch:  # Manual trigger only (publish-release.yml handles automatic releases)
+
+jobs:
+  build-conda:
+    name: Build Conda Package
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ['3.8', '3.9', '3.10', '3.11', '3.12']
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Conda
+      uses: conda-incubator/setup-miniconda@v3
+      with:
+        python-version: ${{ matrix.python-version }}
+        channels: conda-forge
+        channel-priority: strict
+        activate-environment: build-env
+
+    - name: Install conda-build
+      shell: bash -l {0}
+      run: |
+        conda install -y conda-build anaconda-client
+
+    - name: Build conda package
+      shell: bash -l {0}
+      run: |
+        conda build conda.recipe --output-folder ./conda-bld
+
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: conda-package-${{ matrix.os }}-py${{ matrix.python-version }}
+        path: ./conda-bld/**/*.tar.bz2
+        retention-days: 7
+
+  publish-conda:
+    name: Publish to Anaconda Cloud
+    needs: build-conda
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release' && github.event.action == 'published'
+
+    steps:
+    - name: Set up Conda
+      uses: conda-incubator/setup-miniconda@v3
+      with:
+        python-version: '3.11'
+        channels: conda-forge
+
+    - name: Install anaconda-client
+      shell: bash -l {0}
+      run: |
+        conda install -y anaconda-client
+
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        pattern: conda-package-*
+        merge-multiple: true
+        path: ./conda-packages
+
+    - name: Upload to Anaconda Cloud
+      shell: bash -l {0}
+      env:
+        ANACONDA_API_TOKEN: ${{ secrets.ANACONDA_API_TOKEN }}
+      run: |
+        # Login using token
+        anaconda -t $ANACONDA_API_TOKEN upload ./conda-packages/**/*.tar.bz2 --force --label main
+
+    - name: Summary
+      shell: bash -l {0}
+      run: |
+        echo "### Conda Package Published! :rocket:" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "Users can install with:" >> $GITHUB_STEP_SUMMARY
+        echo '```bash' >> $GITHUB_STEP_SUMMARY
+        echo "conda install -c ${{ github.repository_owner }} slick_queue_py" >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY

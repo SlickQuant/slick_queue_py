@@ -1,0 +1,2 @@
+# Core dependencies (Python 3.8+ includes these)
+# multiprocessing.shared_memory is included in Python 3.8+

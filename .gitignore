@@ -205,3 +205,39 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+dist/
+build/
+*.DS_Store
+.vscode/
+.idea/
+
+# CMake build artifacts
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.cmake
+!CMakeLists.txt
+
+# C++ build artifacts
+*.o
+*.obj
+*.exe
+*.out
+*.app
+cpp_producer
+cpp_consumer
+cpp_multi_producer
+
+# Test artifacts
+tests/*.txt
+!tests/CMakeLists.txt
+!tests/*.py
+!tests/*.cpp
+
+# Shared memory cleanup
+*.shm
+
+# File indicating readiness
+ready

@@ -36,11 +36,18 @@ add_executable(cpp_multi_producer cpp_multi_producer.cpp)
 target_link_libraries(cpp_multi_producer PRIVATE slick_queue)
 
 # Platform-specific linking and compilation flags
-if(UNIX)
+if(UNIX AND NOT APPLE)
+    # Link rt library on Linux (not needed on macOS)
     target_link_libraries(cpp_producer PRIVATE pthread rt)
     target_link_libraries(cpp_consumer PRIVATE pthread rt)
     target_link_libraries(cpp_work_stealing_consumer PRIVATE pthread rt)
     target_link_libraries(cpp_multi_producer PRIVATE pthread rt)
+elseif(APPLE)
+    # macOS only needs pthread
+    target_link_libraries(cpp_producer PRIVATE pthread)
+    target_link_libraries(cpp_consumer PRIVATE pthread)
+    target_link_libraries(cpp_work_stealing_consumer PRIVATE pthread)
+    target_link_libraries(cpp_multi_producer PRIVATE pthread)
 endif()
 
 # Add Python interop tests

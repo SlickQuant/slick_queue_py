@@ -26,6 +26,7 @@ def find_cpp_executable(name):
     # Check common build directories
     search_paths = [
         Path(__file__).parent.parent / "build" / name,
+        Path(__file__).parent.parent / "build" / "tests" / name,
         Path(__file__).parent.parent / "build" / f"{name}.exe",
         Path(__file__).parent.parent / "build" / "tests" / "Debug" / f"{name}.exe",
         Path(__file__).parent.parent / "build" / "tests" / "Release" / f"{name}.exe",
@@ -221,7 +222,11 @@ def test_atomic_cursor_local_mode_high_contention():
 
 
 def consumer_process_worker(queue_name, cursor_name, worker_id, num_items, results):
-    """Worker process for shared memory mode tests."""
+    """Worker process for shared memory mode tests.
+
+    Note: num_items is the total number of items to be consumed by ALL workers collectively,
+    not the number each worker should consume.
+    """
 
     # Open shared queue and cursor
     q = SlickQueue(name=queue_name, element_size=32)
@@ -232,7 +237,8 @@ def consumer_process_worker(queue_name, cursor_name, worker_id, num_items, resul
     num_no_data = 0
 
     with open('ready', 'a'):
-        while len(consumed) < num_items:
+        # Keep consuming until we've collectively consumed all items
+        while cursor.load() < num_items:
             data, size = q.read(cursor)
             if data is not None:
                 num_no_data = 0
@@ -240,11 +246,7 @@ def consumer_process_worker(queue_name, cursor_name, worker_id, num_items, resul
                 consumed.append(value)
                 time.sleep(random.uniform(0.003, 0.005))
             else:
-                num_no_data += 1
-                if num_no_data > 5000:
-                    break
                 time.sleep(0.000001)
-    
     results.put((worker_id, consumed))
 
     cursor_shm.close()
@@ -265,7 +267,7 @@ def producer_worker(num_items: int, q: SlickQueue):
         data = struct.pack("<I", i)
         q[idx][:len(data)] = data
         q.publish(idx)
-        time.sleep(random.uniform(0.0001, 0.0003))  # Slow producer
+        time.sleep(random.uniform(0.001, 0.003))  # Slow producer
 
 def test_atomic_cursor_shared_memory_mode():
     """Test AtomicCursor with shared memory queue (multi-process)."""
@@ -563,6 +565,8 @@ def test_atomic_cursor_python_cpp_work_stealing_cursor_created_by_py():
         str(output_file)
     ], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
+    #time.sleep(1)  # Give C++ consumer time to start
+
     # Start consumer processes
     results = MPQueue()
     py_consumer_proc = Process(
@@ -642,6 +646,8 @@ def test_atomic_cursor_python_cpp_work_stealing_cursor_created_by_cpp():
         cursor_name,
         str(output_file)
     ], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+    #time.sleep(1)  # Give C++ consumer time to start
 
     # Start consumer processes
     results = MPQueue()

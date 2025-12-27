@@ -25,6 +25,7 @@ def find_cpp_executable(name):
     # Check common build directories
     search_paths = [
         Path(__file__).parent.parent / "build" / name,
+        Path(__file__).parent.parent / "build" / "tests" / name,
         Path(__file__).parent.parent / "build" / f"{name}.exe",
         Path(__file__).parent.parent / "build" / "tests" / "Debug" / f"{name}.exe",
         Path(__file__).parent.parent / "build" / "tests" / "Release" / f"{name}.exe",
@@ -587,13 +588,6 @@ def test_cpp_shm_creation():
     collector_thread = threading.Thread(target=collect_results, daemon=True)
     collector_thread.start()
 
-    # Wait for all producers
-    cpp_stdout, cpp_stderr = cpp_proc.communicate(timeout=30)
-    print(cpp_stdout)
-    if cpp_proc.returncode != 0:
-        print(cpp_stderr, file=sys.stderr)
-        raise RuntimeError(f"C++ multi-producer failed")
-
     for p in python_producers:
         p.join(timeout=15)
         if p.is_alive():
@@ -604,6 +598,14 @@ def test_cpp_shm_creation():
     if consumer.is_alive():
         consumer.kill()
         raise RuntimeError("Consumer timeout")
+
+    # Wait for all producers
+    cpp_stdout, cpp_stderr = cpp_proc.communicate(timeout=30)
+    print(cpp_stdout)
+    print(cpp_stderr)
+    if cpp_proc.returncode != 0:
+        print(cpp_stderr, file=sys.stderr)
+        raise RuntimeError(f"C++ multi-producer failed")
 
     # Wait for result collection to complete
     collector_thread.join(timeout=10)

@@ -13,7 +13,7 @@
 #include <chrono>
 #include <thread>
 #include <array>
-#include <slick/shm.hpp>
+#include <slick/shm/shared_memory.hpp>
 #include <filesystem>
 #include <random>
 
@@ -80,12 +80,11 @@ int main(int argc, char* argv[]) {
         }
 
         while (!fs::exists("ready")) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
 
         std::atomic<uint64_t>& read_index = *atomic_cursor;
         int consumed = 0;
-        int num_no_data = 0;
         const int MAX_ATTEMPTS = 1000;  // Avoid infinite loop
 
         std::cout << "Starting read loop, expecting " << num_items << " items...\n";
@@ -94,7 +93,6 @@ int main(int argc, char* argv[]) {
 
         // Consume items
         while (read_index.load(std::memory_order_relaxed) < num_items) {
-
             // C++ read() takes read_index by reference and updates it
             // uint64_t prev_read_index = read_index.load(std::memory_order_relaxed);
             auto [data, size] = queue.read(read_index);
@@ -107,7 +105,6 @@ int main(int argc, char* argv[]) {
             // }
 
             if (data != nullptr) {
-                num_no_data = 0;
                 // Parse data: [worker_id (4 bytes), item_num (4 bytes)]
                 // data is now Element* (std::array<uint8_t, 32>*), access via data->data()
                 uint32_t worker_id, item_num;
@@ -121,9 +118,6 @@ int main(int argc, char* argv[]) {
 
                 std::this_thread::sleep_for(std::chrono::milliseconds((int)dist(engine)));
             } else {
-                if (++num_no_data > 1000) {
-                    break;
-                }
                 std::this_thread::sleep_for(std::chrono::microseconds(10));
             }
         }

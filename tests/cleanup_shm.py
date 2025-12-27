@@ -14,7 +14,8 @@ TEST_SHM_NAMES = [
     "test_mpmc_wrap",
     "slick_queue_py_test_shm",
     "test_atomic_cursor_cpp",
-    "test_atomic_cursor_cpp_queue"
+    "test_atomic_cursor_cpp_queue",
+    "test_cpp_shm_creation",
 ]
 
 def cleanup_shm():

@@ -54,8 +54,6 @@ void producer_thread(const char* queue_name, int worker_id, int num_items, int s
         // This produces random numbers in the range [lower_bound, upper_bound)
         std::uniform_real_distribution<double> dist(lower_bound, upper_bound);
 
-        std::this_thread::sleep_for(std::chrono::milliseconds((int)dist(engine) * 30));
-
         for (int i = 0; i < num_items; i++) {
             // Reserve slot (thread-safe atomic CAS)
             auto idx = queue.reserve();
@@ -75,6 +73,11 @@ void producer_thread(const char* queue_name, int worker_id, int num_items, int s
         }
 
         std::cout << "C++ Thread " << worker_id << " completed: " << num_items << " items\n";
+
+        if (queue.own_buffer()) {
+            // Give some time for consumer to finish
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+        }
 
     } catch (const std::exception& e) {
         std::cerr << "C++ Thread " << worker_id << " error: " << e.what() << "\n";

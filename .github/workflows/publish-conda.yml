@@ -25,17 +25,16 @@ jobs:
         channel-priority: strict
         activate-environment: build-env
 
-    - name: Install conda-build and configure solver
+    - name: Install boa and anaconda-client
       shell: bash -l {0}
       run: |
-        # Use classic solver to avoid libmamba compatibility issues
-        conda config --set solver classic
-        conda install -y conda-build anaconda-client
+        # Use boa (conda-forge's modern build tool) for better virtual package resolution
+        conda install -y boa anaconda-client
 
     - name: Build conda package
       shell: bash -l {0}
       run: |
-        conda build conda.recipe --output-folder ./conda-bld
+        conda mambabuild conda.recipe --output-folder ./conda-bld
 
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4

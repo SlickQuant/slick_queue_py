@@ -1,5 +1,5 @@
 {% set name = "slick_queue_py" %}
-{% set version = "1.0.0" %}
+{% set version = "1.0.1" %}
 
 package:
   name: {{ name|lower }}
@@ -20,8 +20,8 @@ source:
 build:
   number: 0
   script: {{ PYTHON }} -m pip install . -vv
-  # Skip Python 2.x and 3.7 and below
-  skip: true  # [py<38]
+  # Skip Python 2.x, 3.7 and below, and 3.14+ (conda-build doesn't support 3.14 yet)
+  skip: true  # [py<38 or py>=314]
 
 requirements:
   build:
@@ -33,7 +33,7 @@ requirements:
     - setuptools >=45
     - wheel
   run:
-    - python >=3.8
+    - python >=3.8,<3.14
 
 test:
   imports:

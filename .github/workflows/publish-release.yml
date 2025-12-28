@@ -61,9 +61,10 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-latest, windows-latest, macos-13]  # macos-13 is x86_64
         python-version: ['3.8', '3.9', '3.10', '3.11', '3.12', '3.13']
         # Note: Excluded Python 3.14 as conda-build doesn't support it yet
+        # Note: Using macos-13 (x86_64) instead of macos-latest (ARM64) to avoid virtual package issues
 
     steps:
     - uses: actions/checkout@v4
@@ -86,8 +87,6 @@ jobs:
     - name: Build conda package
       shell: bash -l {0}
       run: |
-        # Set CONDA_OVERRIDE_OSX to work around virtual package issues on macOS
-        export CONDA_OVERRIDE_OSX="11.0"
         conda build conda.recipe --output-folder ./conda-bld
 
     - name: Upload Conda artifacts

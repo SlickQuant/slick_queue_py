@@ -61,10 +61,10 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-13]  # macos-13 is x86_64
+        os: [ubuntu-latest, windows-latest, macos-15-intel]  # Intel runner for conda compatibility
         python-version: ['3.8', '3.9', '3.10', '3.11', '3.12', '3.13']
         # Note: Excluded Python 3.14 as conda-build doesn't support it yet
-        # Note: Using macos-13 (x86_64) instead of macos-latest (ARM64) to avoid virtual package issues
+        # Note: Using macos-15-intel (x86_64) to avoid ARM64 virtual package resolution issues
 
     steps:
     - uses: actions/checkout@v4

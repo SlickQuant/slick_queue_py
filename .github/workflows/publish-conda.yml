@@ -10,7 +10,8 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        python-version: ['3.8', '3.9', '3.10', '3.11', '3.12']
+        python-version: ['3.8', '3.9', '3.10', '3.11', '3.12', '3.13']
+        # Note: Excluded Python 3.14 as conda-build doesn't support it yet
 
     steps:
     - uses: actions/checkout@v4
@@ -23,9 +24,11 @@ jobs:
         channel-priority: strict
         activate-environment: build-env
 
-    - name: Install conda-build
+    - name: Install conda-build and configure solver
       shell: bash -l {0}
       run: |
+        # Use classic solver to avoid libmamba compatibility issues
+        conda config --set solver classic
         conda install -y conda-build anaconda-client
 
     - name: Build conda package

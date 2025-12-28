@@ -140,7 +140,7 @@ def consumer_worker(q, cursor, worker_id, results):
     items_processed = 0
     while True:
         # Atomically claim next item (work-stealing)
-        data, size = q.read(cursor)
+        data, size, index = q.read(cursor)
 
         if data is None:
             break  # No more data
@@ -196,7 +196,7 @@ def consumer_worker(queue_name, cursor_name, worker_id):
     items_processed = 0
     while True:
         # Atomically claim next item (work-stealing)
-        data, size = q.read(cursor)
+        data, size, index = q.read(cursor)
 
         if data is None:
             break  # No more data
@@ -404,7 +404,7 @@ data, size, read_index = q.read(read_index)
 # Python multi-consumer (atomic cursor)
 from slick_queue_py import AtomicCursor
 cursor = AtomicCursor(cursor_shm.buf, 0)
-data, size = q.read(cursor)  # Atomically claim next item
+data, size, index = q.read(cursor)  # Atomically claim next item
 
 # C++ (updates by reference for both)
 auto [data, size] = queue.read(read_index);  // read_index modified in-place
@@ -431,7 +431,7 @@ cursor.store(0)
 
 # Multiple threads can share this cursor
 while True:
-    data, size = q.read(cursor)  # Each thread atomically claims items
+    data, size, index = q.read(cursor)  # Each thread atomically claims items
     if data is not None:
         process(data)
 ```
@@ -448,7 +448,7 @@ cursor.store(0)
 
 # Multiple processes can share this cursor
 while True:
-    data, size = q.read(cursor)  # Each process atomically claims items
+    data, size, index = q.read(cursor)  # Each process atomically claims items
     if data is not None:
         process(data)
 ```

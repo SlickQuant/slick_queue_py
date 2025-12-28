@@ -28,6 +28,8 @@ jobs:
     - name: Install conda-build and anaconda-client
       shell: bash -l {0}
       run: |
+        # Use classic solver to avoid libmamba compatibility issues
+        conda config --set solver classic
         conda install -y conda-build anaconda-client
 
     - name: Build conda package

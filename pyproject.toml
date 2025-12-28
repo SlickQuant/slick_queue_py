@@ -42,3 +42,28 @@ py-modules = ["slick_queue_py", "atomic_ops"]
 
 [tool.setuptools.dynamic]
 version = {attr = "slick_queue_py.__version__"}
+
+[tool.cibuildwheel]
+# Build for CPython 3.8-3.14
+build = "cp38-* cp39-* cp310-* cp311-* cp312-* cp313-* cp314-*"
+# Skip musllinux builds (only build manylinux for Linux)
+skip = "*-musllinux_*"
+
+# Test the wheels after building
+test-command = "python -c \"import slick_queue_py; import atomic_ops; print('Import successful')\""
+test-requires = []
+
+# Build settings
+build-verbosity = 1
+
+# Platform-specific settings
+[tool.cibuildwheel.linux]
+archs = ["x86_64"]
+# Use manylinux2014 for compatibility (RHEL 7+, Ubuntu 14.04+, Debian 8+)
+manylinux-x86_64-image = "manylinux2014"
+
+[tool.cibuildwheel.windows]
+archs = ["AMD64"]
+
+[tool.cibuildwheel.macos]
+archs = ["universal2"]

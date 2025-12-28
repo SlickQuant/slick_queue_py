@@ -29,7 +29,7 @@ jobs:
 
     - name: Install Python package with C++ extension
       run: |
-        pip install -v -e .
+        pip install -e .
         python -c "import atomic_ops; supported, msg = atomic_ops.check_platform_support(); print(f'Platform support: {supported}, {msg}'); print('Extension location:', atomic_ops._atomic_ops_ext if hasattr(atomic_ops, '_atomic_ops_ext') else 'Not loaded')"
 
     - name: Get Python executable path

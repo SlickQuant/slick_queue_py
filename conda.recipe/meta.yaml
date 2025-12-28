@@ -20,7 +20,7 @@ source:
 build:
   number: 0
   script: {{ PYTHON }} -m pip install . -vv
-  # Skip Python 2.x, 3.7 and below, and 3.14+ (conda-build doesn't support 3.14 yet)
+  # Skip Python 2.x, 3.7 and below, and 3.14+ (not yet released)
   skip: true  # [py<38 or py>=314]
 
 requirements:

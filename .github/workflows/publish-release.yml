@@ -63,7 +63,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-15-intel]  # Intel runner for conda compatibility
         python-version: ['3.8', '3.9', '3.10', '3.11', '3.12', '3.13']
-        # Note: rattler-build (boa's successor) supports all Python versions
+        # Note: Excluded Python 3.14 as conda-build doesn't support it yet
         # Note: Using macos-15-intel (x86_64) for consistency with conda-forge practices
 
     steps:
@@ -77,16 +77,15 @@ jobs:
         channel-priority: strict
         activate-environment: build-env
 
-    - name: Install rattler-build and anaconda-client
+    - name: Install conda-build and anaconda-client
       shell: bash -l {0}
       run: |
-        # Use rattler-build (boa's successor, written in Rust) for better virtual package resolution
-        conda install -y rattler-build anaconda-client
+        conda install -y conda-build anaconda-client
 
     - name: Build conda package
       shell: bash -l {0}
       run: |
-        rattler-build build --recipe conda.recipe --output-dir ./conda-bld
+        conda build conda.recipe --output-folder ./conda-bld
 
     - name: Upload Conda artifacts
       uses: actions/upload-artifact@v4

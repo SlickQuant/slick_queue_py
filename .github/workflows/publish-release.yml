@@ -62,8 +62,8 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-15-intel]  # Intel runner for conda compatibility
-        python-version: ['3.8', '3.9', '3.10', '3.11', '3.12', '3.13']
-        # Note: Excluded Python 3.14 as conda-build doesn't support it yet
+        python-version: ['3.8', '3.9', '3.10', '3.11', '3.12']
+        # Note: Excluded Python 3.13+ due to conda-build virtual package resolution issues
         # Note: Using macos-15-intel (x86_64) for consistency with conda-forge practices
 
     steps:

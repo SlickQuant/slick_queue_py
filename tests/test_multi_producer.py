@@ -158,32 +158,35 @@ def consumer_worker(shm_name, element_size, expected_count, worker_id, results_q
         consumed = []
         read_index = 0
 
-        with open('ready', 'a'):
-            # Keep reading until we've consumed expected_count items
-            while len(consumed) < expected_count:
-                data, size, read_index = q.read(read_index)
-                offset = 0
-                if data is not None:
-                    index = read_index - size
-                    # print(f'read: {index} {size}')
-                    while size > 0:
-                        # Parse the data
-                        producer_id, item = struct.unpack("<I I", data[offset:offset + 8])
-                        # Track the index where this item was read from (read_index - 1 because read() already incremented it)
-                        consumed.append((producer_id, item, index))
-                        # print(f'consume: {index} {producer_id} {item}. consumed: {len(consumed)} expected: {expected_count}')
-                        offset += element_size
-                        size -= 1
-                        index += 1
-                else:
-                    # No data available, small sleep to avoid busy-waiting
-                    time.sleep(0.001)
+        # Signal that consumer is ready (create/touch the file, then close it immediately)
+        with open('ready', 'a') as f:
+            pass  # Just create/touch the file
+        
+        # Keep reading until we've consumed expected_count items
+        while len(consumed) < expected_count:
+            data, size, read_index = q.read(read_index)
+            offset = 0
+            if data is not None:
+                index = read_index - size
+                # print(f'read: {index} {size}')
+                while size > 0:
+                    # Parse the data
+                    producer_id, item = struct.unpack("<I I", data[offset:offset + 8])
+                    # Track the index where this item was read from (read_index - 1 because read() already incremented it)
+                    consumed.append((producer_id, item, index))
+                    # print(f'consume: {index} {producer_id} {item}. consumed: {len(consumed)} expected: {expected_count}')
+                    offset += element_size
+                    size -= 1
+                    index += 1
+            else:
+                # No data available, small sleep to avoid busy-waiting
+                time.sleep(0.001)
 
-            # Send the full consumed list - the background thread in main process
-            # will drain the queue so put() won't block
-            results_queue.put(('consumer', worker_id, consumed))
-            q.close()
-            # print(f'comsumer complete. consumed: {len(consumed)}')
+        # Send the full consumed list - the background thread in main process
+        # will drain the queue so put() won't block
+        results_queue.put(('consumer', worker_id, consumed))
+        q.close()
+        # print(f'comsumer complete. consumed: {len(consumed)}')
     except Exception as e:
         try:
             results_queue.put_nowait(('error', worker_id, str(e)))

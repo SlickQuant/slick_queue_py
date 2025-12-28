@@ -15,18 +15,34 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
         build_type: [Release, Debug]
+        python-version: ['3.12']
 
     runs-on: ${{ matrix.os }}
 
     steps:
     - uses: actions/checkout@v4
 
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install Python package with C++ extension
+      run: |
+        pip install -v -e .
+        python -c "import atomic_ops; supported, msg = atomic_ops.check_platform_support(); print(f'Platform support: {supported}, {msg}'); print('Extension location:', atomic_ops._atomic_ops_ext if hasattr(atomic_ops, '_atomic_ops_ext') else 'Not loaded')"
+
+    - name: Get Python executable path
+      id: python-path
+      run: python -c "import sys; print(f'path={sys.executable}')" >> $GITHUB_OUTPUT
+      shell: bash
+
     - name: Configure CMake
-      run: cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+      run: cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DPython3_EXECUTABLE="${{ steps.python-path.outputs.path }}"
 
     - name: Build
       run: cmake --build build --config ${{ matrix.build_type }}
 
     - name: Run Tests
       working-directory: build
-      run: ctest -C ${{ matrix.build_type }} --output-on-failure
+      run: ctest -C ${{ matrix.build_type }} --output-on-failure --verbose

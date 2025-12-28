@@ -59,13 +59,23 @@ class SlickQueue:
     """
 
     def __init__(self, *, name: Optional[str] = None, size: Optional[int] = None, element_size: Optional[int] = None):
-        # On Linux, POSIX shared memory names must start with /
-        # The C++ slick_queue library passes the name directly to shm_open(),
-        # which requires the / prefix. Python's SharedMemory strips it from .name,
-        # but we need to add it for C++ interop.
+        # Store the original user-provided name (without / prefix)
+        # Python's SharedMemory will add the / prefix on POSIX systems automatically.
+        # We strip any leading / to avoid double-prefixing (//name) on POSIX systems.
         self.name = name
-        if self.name is not None and sys.platform != 'win32' and not self.name.startswith('/'):
-            self.name = '/' + self.name
+        if self.name is not None and self.name.startswith('/'):
+            # Strip leading / if user provided it - Python's SharedMemory will add it back on POSIX
+            self.name = self.name[1:]
+
+        # macOS has a 31-character limit for POSIX shared memory names (including leading /)
+        # Check the length that will be used (with / prefix on POSIX systems)
+        if self.name is not None and sys.platform == 'darwin':
+            # On macOS, Python's SharedMemory will prepend /, so check total length
+            final_name = '/' + self.name
+            if len(final_name) > 31:
+                raise ValueError(f"Shared memory name '{final_name}' is {len(final_name)} characters, "
+                               f"but macOS has a 31-character limit. Please use a shorter name.")
+
         self.use_shm = name is not None
         self._shm: Optional[SharedMemory] = None
         self._local_buf: Optional[bytearray] = None
@@ -200,17 +210,25 @@ class SlickQueue:
         """
         Get the actual shared memory name for C++ interop.
 
-        Returns the name with POSIX / prefix on Linux (required by C++ shm_open).
-        Python's SharedMemory.name property strips the / prefix, but this method
-        returns self.name which preserves it for C++ interop.
+        Returns the name with POSIX / prefix (required by C++ shm_open).
+        On POSIX systems (Linux/macOS), this returns the name with the / prefix.
+        On Windows, it returns the name without modification.
 
         Returns:
             The shared memory name that C++ code should use to open the queue.
-            On Linux, this will have the / prefix that shm_open() requires.
+            On POSIX systems, this will have the / prefix that shm_open() requires.
         """
-        # Return self.name (which has / prefix on Linux) rather than self._shm.name
-        # (which has / stripped by Python)
-        return self.name
+        if self._shm is not None:
+            # Use the actual name from SharedMemory (which has / prefix on POSIX)
+            return self._shm._name
+        elif self.name is not None:
+            # If SharedMemory not created yet, construct the expected name
+            # On POSIX, need to add / prefix; on Windows, use as-is
+            if sys.platform != 'win32':
+                return '/' + self.name
+            else:
+                return self.name
+        return None
 
     # Public API mirroring C++ methods
     def reserve(self, n: int = 1) -> int:
@@ -293,7 +311,7 @@ class SlickQueue:
         off = self._data_offset + (index & self.mask) * self.element_size
         return self._buf[off: off + self.element_size]
 
-    def read(self, read_index: Union[int, AtomicCursor]) -> Union[Tuple[Optional[bytes], int, int], Tuple[Optional[bytes], int]]:
+    def read(self, read_index: Union[int, AtomicCursor]) -> Union[Tuple[Optional[bytes], int, int], Tuple[Optional[bytes], int, int]]:
         """
         Read data from the queue.
 
@@ -327,7 +345,7 @@ class SlickQueue:
 
             # Multi-consumer work-stealing
             cursor = AtomicCursor(cursor_shm.buf, 0)
-            data, size = q.read(cursor)  # Atomically claim next item
+            data, size, index = q.read(cursor)  # Atomically claim next item
         """
         if isinstance(read_index, AtomicCursor):
             return self._read_atomic_cursor(read_index)
@@ -378,7 +396,7 @@ class SlickQueue:
             new_read_index = data_index + slot_size
             return data, slot_size, new_read_index
 
-    def _read_atomic_cursor(self, read_index: AtomicCursor) -> Tuple[Optional[bytes], int]:
+    def _read_atomic_cursor(self, read_index: AtomicCursor) -> Tuple[Optional[bytes], int, int]:
         """
         Multi-consumer read using a shared atomic cursor (work-stealing pattern).
 
@@ -389,8 +407,8 @@ class SlickQueue:
             read_index: Shared AtomicCursor for coordinating multiple consumers
 
         Returns:
-            Tuple of (data_bytes or None, item_size).
-            If no data available returns (None, 0).
+            Tuple of (data_bytes or None, item_size, data_index).
+            If no data available returns (None, 0, -1).
         """
         if self._buf is None:
             raise RuntimeError("Queue buffer is not initialized")
@@ -415,7 +433,7 @@ class SlickQueue:
 
             # Check if data is ready (C++ lines 296-299)
             if data_index == (2**64 - 1) or data_index < current_index:
-                return None, 0
+                return None, 0, -1
 
             # Check for wrap (C++ lines 300-304)
             if data_index > current_index and ((data_index & self.mask) != idx):
@@ -431,7 +449,7 @@ class SlickQueue:
                 # Successfully claimed the item, read and return it
                 data_off = self._data_offset + (current_index & self.mask) * self.element_size
                 data = bytes(self._buf[data_off: data_off + slot_size * self.element_size])
-                return data, slot_size
+                return data, slot_size, current_index
 
             # CAS failed, another consumer claimed it, retry
 

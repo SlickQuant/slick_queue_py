@@ -137,7 +137,7 @@ if IS_WINDOWS:
                 import atomic_ops_ext
                 _atomic_ops_ext = atomic_ops_ext
                 _USE_EXTENSION = True
-            except ImportError:
+            except ImportError as e2:
                 _USE_EXTENSION = False
         else:
             _USE_EXTENSION = False
@@ -204,8 +204,14 @@ elif IS_LINUX or IS_MACOS:
     # ===== Linux/macOS Implementation =====
     import ctypes.util
 
-    # Linux/macOS use native atomic operations (no C++ extension needed)
-    _USE_EXTENSION = False
+    # Try to use C++ extension first (provides most reliable atomic operations)
+    try:
+        import atomic_ops_ext
+        _atomic_ops_ext = atomic_ops_ext
+        _USE_EXTENSION = True
+    except ImportError:
+        # Fall back to native atomic operations
+        _USE_EXTENSION = False
 
     # Try to load libatomic
     libatomic_path = ctypes.util.find_library('atomic')
@@ -260,15 +266,18 @@ elif IS_LINUX or IS_MACOS:
 
     def _platform_cas_64(buffer: memoryview, offset: int,
                         expected: int, desired: int) -> Tuple[bool, int]:
-        """Linux/macOS-specific 64-bit CAS using __sync_val_compare_and_swap or libatomic."""
+        """Linux/macOS-specific 64-bit CAS using C++ extension, __sync_val_compare_and_swap, or libatomic."""
         # Get pointer to buffer location
         buf_array = (ctypes.c_char * len(buffer)).from_buffer(buffer)
-        ptr = ctypes.cast(
-            ctypes.addressof(buf_array) + offset,
-            ctypes.POINTER(ctypes.c_uint64)
-        )
+        addr = ctypes.addressof(buf_array) + offset
 
-        # Try __sync_val_compare_and_swap first (available on most systems)
+        # Try C++ extension first (most reliable)
+        if _USE_EXTENSION:
+            return _atomic_ops_ext.atomic_cas_64(addr, expected, desired)
+
+        ptr = ctypes.cast(addr, ctypes.POINTER(ctypes.c_uint64))
+
+        # Try __sync_val_compare_and_swap (available on most systems)
         if _sync_val_cas_8 is not None:
             actual = _sync_val_cas_8(ptr, expected, desired)
             success = (actual == expected)
@@ -304,12 +313,16 @@ elif IS_LINUX or IS_MACOS:
 
     def _atomic_store_64(buffer: memoryview, offset: int, value: int) -> None:
         """Atomic 64-bit store with release semantics."""
-        # Use __sync_lock_test_and_set or fallback to fence + store
         buf_array = (ctypes.c_char * len(buffer)).from_buffer(buffer)
-        ptr = ctypes.cast(
-            ctypes.addressof(buf_array) + offset,
-            ctypes.POINTER(ctypes.c_uint64)
-        )
+        addr = ctypes.addressof(buf_array) + offset
+
+        # Use C++ extension first
+        if _USE_EXTENSION:
+            _atomic_ops_ext.atomic_store_64(addr, value)
+            return
+
+        ptr = ctypes.cast(addr, ctypes.POINTER(ctypes.c_uint64))
+
         # For simplicity, use CAS as atomic store
         if _sync_val_cas_8:
             # Read current value and swap with new value
@@ -323,6 +336,12 @@ elif IS_LINUX or IS_MACOS:
 
     def _atomic_load_64(buffer: memoryview, offset: int) -> int:
         """Atomic 64-bit load with acquire semantics."""
+        # Use C++ extension first
+        if _USE_EXTENSION:
+            buf_array = (ctypes.c_char * len(buffer)).from_buffer(buffer)
+            addr = ctypes.addressof(buf_array) + offset
+            return _atomic_ops_ext.atomic_load_64(addr)
+
         # On x86-64, aligned 64-bit reads are atomic
         value = struct.unpack_from("<Q", buffer, offset)[0]
         _memory_fence_acquire()

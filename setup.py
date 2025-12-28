@@ -26,7 +26,7 @@ atomic_ops_ext = Extension(
     sources=['atomic_ops_ext.cpp'],
     include_dirs=[],
     libraries=[],
-    extra_compile_args=['/std:c++11', '/O2'] if sys.platform == 'win32' else ['-std=c++11', '-O2'],
+    extra_compile_args=['/std:c++17', '/O2'] if sys.platform == 'win32' else ['-std=c++17', '-O2'],
 )
 
 setup(

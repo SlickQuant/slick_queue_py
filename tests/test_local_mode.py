@@ -29,7 +29,6 @@ def test_local_mode():
         data, size, read_index = q.read(read_index)
         assert data is not None, f"No data at iteration {i}"
         value = struct.unpack("<I", data[:4])[0]
-        print(f"Read value: {value}")
         assert value == i, f"Expected {i}, got {value}"
 
     # Cleanup (should be no-op for unlink in local mode)

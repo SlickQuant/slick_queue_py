@@ -4,6 +4,10 @@ Python implementation of SlickQueue - a lock-free multi-producer multi-consumer 
 
 This is the Python binding for the [SlickQueue C++ library](https://github.com/SlickQuant/slick_queue). The Python implementation maintains exact binary compatibility with the C++ version, enabling seamless interprocess communication between Python and C++ applications.
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![CI](https://github.com/SlickQuant/slick_queue_py/actions/workflows/ci.yml/badge.svg)](https://github.com/SlickQuant/slick_queue_py/actions/workflows/ci.yml)
+[![GitHub release](https://img.shields.io/github/v/release/SlickQuant/slick_queue_py)](https://github.com/SlickQuant/slick_queue_py/releases)
+
 ## Features
 
 - **Dual Mode Operation**:
@@ -560,37 +564,39 @@ Offset | Size          | Content
 ## Platform Support
 
 ### Fully Supported (Lock-Free)
-- **Windows x86-64**: Uses native C++ extension (`atomic_ops_ext.pyd`) with MSVC intrinsics
-- **Linux x86-64**: Uses `libatomic` directly via ctypes (no extension needed)
-- **macOS x86-64**: Uses `libatomic` directly via ctypes (no extension needed)
+- **Windows x86-64**: Uses C++ extension (`atomic_ops_ext.pyd`) with `std::atomic`
+- **Linux x86-64**: Uses C++ extension (`atomic_ops_ext.so`) with `std::atomic`, fallback to `libatomic`
+- **macOS x86-64**: Uses C++ extension (`atomic_ops_ext.so`) with `std::atomic`, fallback to compiler builtins
 
 **Platform-specific atomic operation implementations:**
-- **Windows**: Requires building the `atomic_ops_ext` C++ extension (uses `std::atomic`)
-- **Linux/macOS**: Uses `libatomic` library directly via ctypes (uses `__sync_val_compare_and_swap_8`)
+- **All platforms**: The `atomic_ops_ext` C++ extension is now used on all platforms for the most reliable cross-process atomic operations
+- **Fallback support**: Linux/macOS can fall back to `libatomic` or compiler builtins if the extension isn't available
 
-### Building the Windows Extension
+### Building and Installation
 
-On Windows, the native extension is required for lock-free multi-producer support:
+The C++ extension is built automatically during installation:
 
 ```bash
-# Install build dependencies
-pip install setuptools wheel
+# Install with automatic extension build
+pip install -e .
 
-# Build and install the extension
+# Or build manually first
 python setup.py build_ext --inplace
-
-# Or install in development mode (builds automatically)
 pip install -e .
 ```
 
-**Windows requirements:**
-- Visual Studio 2017+ or MSVC build tools
-- Python development headers (included with standard Python installation)
+**Build requirements:**
+- **Windows**: Visual Studio 2017+ or MSVC build tools
+- **Linux**: GCC 5+ or Clang 3.8+
+- **macOS**: Xcode command line tools (clang)
+- **All platforms**: Python development headers (included with standard Python installation)
 
-The extension will be built as `atomic_ops_ext.cp312-win_amd64.pyd` (or similar based on Python version).
+The extension will be built as:
+- Windows: `atomic_ops_ext.cp3XX-win_amd64.pyd`
+- Linux: `atomic_ops_ext.cpython-3XX-x86_64-linux-gnu.so`
+- macOS: `atomic_ops_ext.cpython-3XX-darwin.so`
 
-**Linux/macOS:**
-No build step required! The `libatomic` library is typically included with GCC/Clang toolchains and is automatically loaded via ctypes.
+(where `XX` is your Python version, e.g., `312` for Python 3.12)
 
 ### Requirements for Lock-Free Operation
 

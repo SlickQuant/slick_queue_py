@@ -70,34 +70,37 @@ def python_producer(queue_name, num_items, worker_id, results_queue, size=64):
 def python_consumer(queue_name, num_items, results_queue, starting_index):
     """Python consumer process."""
     try:
-        with open('ready', 'a'):
-            # On Windows, we need to specify size when opening existing shared memory
-            # q = SlickQueue(name=queue_name, size=size, element_size=32)
-            q = SlickQueue(name=queue_name, element_size=32)
-            consumed = []
-            # read_index = 0
-            read_index = starting_index
-            attempts = 0
-            max_attempts = 10000
+        # Signal that consumer is ready (create/touch the file, then close it immediately)
+        with open('ready', 'a') as f:
+            pass  # Just create/touch the file
 
-            while len(consumed) < num_items and attempts < max_attempts:
-                attempts += 1
-                prev_read_index = read_index
-                data, size, read_index = q.read(read_index)
+        # On Windows, we need to specify size when opening existing shared memory
+        # q = SlickQueue(name=queue_name, size=size, element_size=32)
+        q = SlickQueue(name=queue_name, element_size=32)
+        consumed = []
+        # read_index = 0
+        read_index = starting_index
+        attempts = 0
+        max_attempts = 10000
 
-                if data is not None:
-                    worker_id, item_num = struct.unpack("<I I", data[:8])
-                    consumed.append((worker_id, item_num))
-                    # print(f"consume {worker_id} {item_num} (from index {prev_read_index}, consumed: {len(consumed)})", flush=True)
-                else:
-                    time.sleep(0.001)
+        while len(consumed) < num_items and attempts < max_attempts:
+            attempts += 1
+            prev_read_index = read_index
+            data, size, read_index = q.read(read_index)
 
-            # print(f"CONSUMER: About to put {len(consumed)} items into results queue", flush=True)
-            results_queue.put(('success', consumed))
-            # print(f"CONSUMER: Successfully put results into queue", flush=True)
-            q.close()
-            time.sleep(1)
-            # print(f"CONSUMER: Exiting normally", flush=True)
+            if data is not None:
+                worker_id, item_num = struct.unpack("<I I", data[:8])
+                consumed.append((worker_id, item_num))
+                # print(f"consume {worker_id} {item_num} (from index {prev_read_index}, consumed: {len(consumed)})", flush=True)
+            else:
+                time.sleep(0.001)
+
+        # print(f"CONSUMER: About to put {len(consumed)} items into results queue", flush=True)
+        results_queue.put(('success', consumed))
+        # print(f"CONSUMER: Successfully put results into queue", flush=True)
+        q.close()
+        time.sleep(1)
+        # print(f"CONSUMER: Exiting normally", flush=True)
     except Exception as e:
         print(f"CONSUMER: Exception - {str(e)}", flush=True)
         results_queue.put(('error', str(e)))
@@ -169,6 +172,7 @@ def test_python_producer_cpp_consumer():
             )
 
             print(proc.stdout)
+            print(proc.stderr)
             if proc.returncode != 0:
                 print(proc.stderr, file=sys.stderr)
                 raise RuntimeError(f"C++ consumer failed with code {proc.returncode}")

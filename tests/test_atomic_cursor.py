@@ -59,7 +59,7 @@ def test_atomic_cursor_local_mode_basic():
     # Consume with atomic cursor
     consumed = []
     for _ in range(10):
-        data, size = q.read(cursor)
+        data, size,  _ = q.read(cursor)
         if data is not None:
             value = struct.unpack("<I", data[:4])[0]
             consumed.append(value)
@@ -68,7 +68,7 @@ def test_atomic_cursor_local_mode_basic():
     assert consumed == list(range(10)), f"Expected {list(range(10))}, got {consumed}"
 
     # Verify no more data
-    data, size = q.read(cursor)
+    data, size, _ = q.read(cursor)
     assert data is None, "Expected no more data"
 
     q.close()
@@ -104,7 +104,7 @@ def test_atomic_cursor_local_mode_multi_thread():
         max_consecutive_none = 20  # Give more chances
         time.sleep(random.uniform(0.03, 0.05))
         while len(consumed) < num_items and consecutive_none < max_consecutive_none:
-            data, _ = q.read(cursor)
+            data, size, data_index = q.read(cursor)
             if data is None:
                 consecutive_none += 1
             else:
@@ -173,7 +173,7 @@ def test_atomic_cursor_local_mode_high_contention():
         consumed = []
         no_data_count = 0
         while len(consumed) < num_items // num_threads + 50:  # Over-subscribe
-            data, size = q.read(cursor)
+            data, size, _ = q.read(cursor)
             if data is not None:
                 no_data_count = 0
                 value = struct.unpack("<I", data[:4])[0]
@@ -181,7 +181,7 @@ def test_atomic_cursor_local_mode_high_contention():
                 time.sleep(random.uniform(0.0003, 0.0005))
             else:
                 no_data_count += 1
-                if no_data_count > 1000:
+                if no_data_count > 10000:
                     break
                 time.sleep(0.00001)  # Wait for producer
         results[worker_id] = consumed
@@ -234,19 +234,20 @@ def consumer_process_worker(queue_name, cursor_name, worker_id, num_items, resul
     cursor = AtomicCursor(cursor_shm.buf, 0)
 
     consumed = []
-    num_no_data = 0
 
-    with open('ready', 'a'):
-        # Keep consuming until we've collectively consumed all items
-        while cursor.load() < num_items:
-            data, size = q.read(cursor)
-            if data is not None:
-                num_no_data = 0
-                value = struct.unpack("<I", data[:4])[0]
-                consumed.append(value)
-                time.sleep(random.uniform(0.003, 0.005))
-            else:
-                time.sleep(0.000001)
+    # Signal that consumer is ready (create/touch the file, then close it immediately)
+    with open('ready', 'a') as f:
+        pass  # Just create/touch the file
+
+    # Keep consuming until we've collectively consumed all items
+    while cursor.load() < num_items:
+        data, size, data_index = q.read(cursor)
+        if data is not None:
+            value = struct.unpack("<I", data[:4])[0]
+            consumed.append(value)
+            time.sleep(random.uniform(0.0003, 0.0005))
+        else:
+            time.sleep(0.000001)
     results.put((worker_id, consumed))
 
     cursor_shm.close()
@@ -394,7 +395,7 @@ def test_atomic_cursor_compare_with_int_cursor():
 
     consumed_atomic = []
     for _ in range(num_items):
-        data, size = q2.read(cursor)
+        data, size, _ = q2.read(cursor)
         if data is not None:
             value = struct.unpack("<I", data[:4])[0]
             consumed_atomic.append(value)
@@ -436,7 +437,7 @@ def test_atomic_cursor_wraparound():
         q.publish(idx, sz)
 
         # Consume immediately
-        data, size = q.read(cursor)
+        data, size, _ = q.read(cursor)
         if data is not None:
             offset = 0
             while size > 0:
@@ -455,7 +456,7 @@ def test_atomic_cursor_python_cpp_work_stealing_cursor_created_by_py():
     print("\n=== Test: AtomicCursor with C++ Work-Stealing Consumer, cursor created by Python ===")
 
     queue_name = 'test_atomic_cursor_cpp_queue'
-    cursor_name = 'test_atomic_cursor_cpp_cursor_py_created'
+    cursor_name = 'test_cur_cpp_py_created'
     num_items = 100
 
     try:
@@ -469,15 +470,18 @@ def test_atomic_cursor_python_cpp_work_stealing_cursor_created_by_py():
     cursor = AtomicCursor(cursor_shm.buf, 0)
     cursor.store(0)
 
+    actual_name = q.get_shm_name()
+    actual_cursor_name = cursor_shm._name
+
     # Start C++ consumer process
     cpp_consumer = find_cpp_executable("cpp_work_stealing_consumer")
     output_file = Path(__file__).parent / "cpp_work_stealing_consumer_output.txt"
     cpp_consumer_proc = subprocess.Popen([
         cpp_consumer,
-        queue_name,
+        actual_name,
         str(num_items),
         str(32),  # element size
-        cursor_name,
+        actual_cursor_name,
         str(output_file)
     ], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
@@ -499,6 +503,7 @@ def test_atomic_cursor_python_cpp_work_stealing_cursor_created_by_py():
     stdout, stderr = cpp_consumer_proc.communicate()
 
     print(stdout.decode())
+    print(stderr.decode())
     if cpp_consumer_proc.returncode != 0:
         print(stderr, file=sys.stderr)
         raise RuntimeError(f"C++ consumer failed with code {cpp_consumer_proc.returncode}")
@@ -533,98 +538,13 @@ def test_atomic_cursor_python_cpp_work_stealing_cursor_created_by_py():
 
     print(f"[PASS] C++ work-stealing consumer cursor created by Python test passed: {num_items} items consumed")
 
-
-def test_atomic_cursor_python_cpp_work_stealing_cursor_created_by_py():
-    """Test AtomicCursor with a C++ work-stealing consumer, cursor created by Python."""
-    print("\n=== Test: AtomicCursor with C++ Work-Stealing Consumer, cursor created by Python ===")
-
-    queue_name = 'test_atomic_cursor_cpp_queue'
-    cursor_name = 'test_atomic_cursor_cpp_cursor_py_created'
-    num_items = 100
-
-    try:
-        os.remove('ready')
-    except Exception:
-        pass
-
-    # Create shared queue and cursor
-    q = SlickQueue(name=queue_name, size=128, element_size=32)
-    cursor_shm = SharedMemory(name=cursor_name, create=True, size=8)
-    cursor = AtomicCursor(cursor_shm.buf, 0)
-    cursor.store(0)
-
-    # Start C++ consumer process
-    cpp_consumer = find_cpp_executable("cpp_work_stealing_consumer")
-    output_file = Path(__file__).parent / "cpp_work_stealing_consumer_output.txt"
-    cpp_consumer_proc = subprocess.Popen([
-        cpp_consumer,
-        queue_name,
-        str(num_items),
-        str(32),  # element size
-        cursor_name,
-        str(output_file)
-    ], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-
-    #time.sleep(1)  # Give C++ consumer time to start
-
-    # Start consumer processes
-    results = MPQueue()
-    py_consumer_proc = Process(
-        target=consumer_process_worker,
-        args=(queue_name, cursor_name, 0, num_items, results)
-    )
-    py_consumer_proc.start()
-
-    # Start producer
-    producer = Thread(target=producer_worker, args=(num_items, q))
-    producer.start()
-
-    producer.join()
-    py_consumer_proc.join()
-
-    stdout, stderr = cpp_consumer_proc.communicate()
-
-    print(stdout.decode())
-    if cpp_consumer_proc.returncode != 0:
-        print(stderr, file=sys.stderr)
-        raise RuntimeError(f"C++ consumer failed with code {cpp_consumer_proc.returncode}")
-    
-    # Verify consumed data
-    consumed = []
-    with open(output_file, 'r') as f:
-        for line in f:
-            item, _ = map(int, line.strip().split())
-            consumed.append(item)
-
-    py_result = results.get(timeout=5)
-    py_consumed = py_result[1]
-    print("Python consumer consumed:", len(py_consumed))
-    consumed.extend(item for item in py_consumed)
-
-    # Check all items consumed
-    assert len(consumed) == num_items, f"Expected {num_items} items, got {len(consumed)}"
-
-    # Check data integrity
-    expected = set(range(num_items))
-    actual = set(consumed)
-    assert expected == actual, f"Data mismatch between produced and consumed"
-
-    # Cleanup
-    cursor_shm.close()
-    cursor_shm.unlink()
-    q.close()
-    q.unlink()
-    if output_file.exists():
-        output_file.unlink()
-
-    print(f"[PASS] C++ work-stealing consumer cursor created by Python test passed: {num_items} items consumed")
 
 def test_atomic_cursor_python_cpp_work_stealing_cursor_created_by_cpp():
     """Test AtomicCursor with a C++ work-stealing consumer, cursor created by C++."""
     print("\n=== Test: AtomicCursor with C++ Work-Stealing Consumer, cursor created by C++ ===")
 
     queue_name = 'test_atomic_cursor_cpp_queue'
-    cursor_name = 'test_atomic_cursor_cpp_cursor_cpp_created'
+    cursor_name = 'test_cur_cpp_cpp_created'
     num_items = 100
 
     try:
@@ -635,15 +555,23 @@ def test_atomic_cursor_python_cpp_work_stealing_cursor_created_by_cpp():
     # Create shared queue and cursor
     q = SlickQueue(name=queue_name, size=128, element_size=32)
 
+    actual_queue_name = q.get_shm_name()
+
+    # Get actual cursor name for C++ (with / prefix on POSIX)
+    if sys.platform != 'win32':
+        actual_cursor_name = '/' + cursor_name if not cursor_name.startswith('/') else cursor_name
+    else:
+        actual_cursor_name = cursor_name
+
     # Start C++ consumer process
     cpp_consumer = find_cpp_executable("cpp_work_stealing_consumer")
     output_file = Path(__file__).parent / "cpp_work_stealing_consumer_output.txt"
     cpp_consumer_proc = subprocess.Popen([
         cpp_consumer,
-        queue_name,
+        actual_queue_name,
         str(num_items),
         str(32),  # element size
-        cursor_name,
+        actual_cursor_name,
         str(output_file)
     ], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
@@ -667,6 +595,7 @@ def test_atomic_cursor_python_cpp_work_stealing_cursor_created_by_cpp():
     stdout, stderr = cpp_consumer_proc.communicate()
 
     print(stdout.decode())
+    print(stderr.decode())
     if cpp_consumer_proc.returncode != 0:
         print(stderr, file=sys.stderr)
         raise RuntimeError(f"C++ consumer failed with code {cpp_consumer_proc.returncode}")

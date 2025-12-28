@@ -81,6 +81,7 @@ add_test(
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
 )
 
+# Python/C++ interop tests
 add_test(
     NAME python_producer_cpp_consumer
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/test_interop.py --test python_producer_cpp_consumer
@@ -97,4 +98,17 @@ add_test(
     NAME multi_producer_interop
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/test_interop.py --test multi_producer_interop
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+)
+
+# Set timeouts for all tests to prevent CI hangs
+set_tests_properties(
+    atomic_ops_test
+    atomic_cursor_test
+    local_mode_test
+    shm_mode_test
+    multi_producer_test
+    python_producer_cpp_consumer
+    cpp_producer_python_consumer
+    multi_producer_interop
+    PROPERTIES TIMEOUT 120
 )

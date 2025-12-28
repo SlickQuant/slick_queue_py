@@ -93,10 +93,49 @@ static PyObject* py_atomic_load_64(PyObject* self, PyObject* args) {
     return PyLong_FromUnsignedLongLong(value);
 }
 
+// Python function: atomic_store_64(addr, value)
+// Returns: None
+static PyObject* py_atomic_store_64(PyObject* self, PyObject* args) {
+    unsigned long long addr;
+    unsigned long long value;
+
+    if (!PyArg_ParseTuple(args, "KK", &addr, &value)) {
+        return NULL;
+    }
+
+    // Destination must be 8-byte aligned
+    if (addr % 8 != 0) {
+        PyErr_SetString(PyExc_ValueError, "Address must be 8-byte aligned for 64-bit atomic operations");
+        return NULL;
+    }
+
+    // Cast address to atomic pointer
+    std::atomic<uint64_t>* atomic_ptr = reinterpret_cast<std::atomic<uint64_t>*>(addr);
+
+    // Perform atomic store with release ordering
+    atomic_ptr->store(value, std::memory_order_release);
+
+    Py_RETURN_NONE;
+}
+
+// Alias for atomic_compare_exchange_64 (for compatibility with Linux/macOS naming)
+static PyObject* py_atomic_cas_64(PyObject* self, PyObject* args) {
+    return py_atomic_compare_exchange_64(self, args);
+}
+
 // Module method definitions
 static PyMethodDef AtomicOpsMethods[] = {
     {"atomic_compare_exchange_64", py_atomic_compare_exchange_64, METH_VARARGS,
      "Atomic 64-bit compare-exchange using C++ std::atomic<uint64_t>\n\n"
+     "Args:\n"
+     "    addr: Memory address\n"
+     "    expected: Expected value\n"
+     "    desired: Desired value\n\n"
+     "Returns:\n"
+     "    (success, actual): Tuple of success flag and actual value\n"},
+
+    {"atomic_cas_64", py_atomic_cas_64, METH_VARARGS,
+     "Atomic 64-bit compare-and-swap (alias for atomic_compare_exchange_64)\n\n"
      "Args:\n"
      "    addr: Memory address\n"
      "    expected: Expected value\n"
@@ -118,6 +157,14 @@ static PyMethodDef AtomicOpsMethods[] = {
      "    addr: Memory address (must be 8-byte aligned)\n\n"
      "Returns:\n"
      "    value: The loaded value\n"},
+
+    {"atomic_store_64", py_atomic_store_64, METH_VARARGS,
+     "Perform 64-bit atomic store using C++11 std::atomic.\n\n"
+     "Args:\n"
+     "    addr: Memory address (must be 8-byte aligned)\n"
+     "    value: Value to store\n\n"
+     "Returns:\n"
+     "    None\n"},
 
     {NULL, NULL, 0, NULL}
 };

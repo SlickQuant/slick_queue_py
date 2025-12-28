@@ -10,6 +10,20 @@ from multiprocessing import shared_memory, Process, Value
 import time
 from pathlib import Path
 
+# Ensure multiprocessing uses spawn on all platforms for consistency
+# This is especially important for Windows/macOS CI environments
+if __name__ != '__main__':
+    # Only set when imported as a module (not when running as main)
+    # This prevents issues with child processes
+    pass
+else:
+    # When running as main, set the start method if not already set
+    try:
+        multiprocessing.set_start_method('spawn', force=False)
+    except RuntimeError:
+        # Already set, ignore
+        pass
+
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -363,5 +377,7 @@ def run_all_tests():
 
 if __name__ == '__main__':
     import sys
+    # Required for Windows when using multiprocessing with spawn
+    multiprocessing.freeze_support()
     success = run_all_tests()
     sys.exit(0 if success else 1)

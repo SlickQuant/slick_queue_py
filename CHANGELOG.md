@@ -15,6 +15,8 @@
 - Linux/macOS now prioritize C++ extension for atomic operations, falling back to native methods (`__sync_val_compare_and_swap` or `libatomic`) if extension is not available
 - Improved atomic operation reliability across all platforms
 - Enhanced test suite for better cross-platform compatibility
+- Publishing: Updated PyPI builds to use `cibuildwheel` for proper manylinux wheel generation
+- Ignore conda publish failing for now
 
 ## [v1.0.0] - 2025-12-26
 

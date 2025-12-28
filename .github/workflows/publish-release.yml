@@ -59,7 +59,9 @@ jobs:
   build-conda:
     name: Build Conda Package
     runs-on: ${{ matrix.os }}
+    continue-on-error: true  # Allow conda builds to fail without blocking PyPI release
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-15-intel]  # Intel runner for conda compatibility
         python-version: ['3.8', '3.9', '3.10', '3.11', '3.12']
@@ -122,6 +124,7 @@ jobs:
     name: Publish to Anaconda Cloud
     needs: build-conda
     runs-on: ubuntu-latest
+    if: success()  # Only run if conda builds succeeded
 
     steps:
     - name: Set up Conda
@@ -154,11 +157,12 @@ jobs:
     name: Release Summary
     needs: [publish-pypi, publish-conda]
     runs-on: ubuntu-latest
+    if: always()  # Run even if conda publish fails
 
     steps:
     - name: Create summary
       run: |
-        echo "## 🎉 Release Published Successfully!" >> $GITHUB_STEP_SUMMARY
+        echo "## 🎉 Release Published!" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### Installation" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
@@ -167,11 +171,18 @@ jobs:
         echo "pip install slick_queue_py" >> $GITHUB_STEP_SUMMARY
         echo '```' >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
-        echo "**Via conda:**" >> $GITHUB_STEP_SUMMARY
-        echo '```bash' >> $GITHUB_STEP_SUMMARY
-        echo "conda install -c ${{ github.repository_owner }} slick_queue_py" >> $GITHUB_STEP_SUMMARY
-        echo '```' >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
+        if [ "${{ needs.publish-conda.result }}" == "success" ]; then
+          echo "**Via conda:**" >> $GITHUB_STEP_SUMMARY
+          echo '```bash' >> $GITHUB_STEP_SUMMARY
+          echo "conda install -c ${{ github.repository_owner }} slick_queue_py" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "⚠️ **Conda builds failed** - Package available on PyPI only" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+        fi
         echo "### Links" >> $GITHUB_STEP_SUMMARY
         echo "- PyPI: https://pypi.org/project/slick_queue_py/" >> $GITHUB_STEP_SUMMARY
-        echo "- Anaconda: https://anaconda.org/${{ github.repository_owner }}/slick_queue_py" >> $GITHUB_STEP_SUMMARY
+        if [ "${{ needs.publish-conda.result }}" == "success" ]; then
+          echo "- Anaconda: https://anaconda.org/${{ github.repository_owner }}/slick_queue_py" >> $GITHUB_STEP_SUMMARY
+        fi
